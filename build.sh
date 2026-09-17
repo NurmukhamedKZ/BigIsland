@@ -1,5 +1,6 @@
 #!/bin/zsh
 # Собирает build/BigIsland.app. Запуск: ./build.sh && open build/BigIsland.app
+# Установка в /Applications (+ автозапуск при входе): ./build.sh --install
 set -e
 cd "$(dirname "$0")"
 
@@ -31,3 +32,11 @@ EOF
 # Требование по bundle id, а не по хэшу: macOS не будет заново спрашивать доступ к папкам после каждой пересборки.
 codesign --force --sign - --identifier com.nurma.bigisland -r='designated => identifier "com.nurma.bigisland"' "$APP"
 echo "Готово: $APP"
+
+if [[ "$1" == "--install" ]]; then
+    pkill -x BigIsland || true
+    rm -rf /Applications/BigIsland.app
+    cp -R "$APP" /Applications/
+    open /Applications/BigIsland.app
+    echo "Установлено: /Applications/BigIsland.app"
+fi

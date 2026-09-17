@@ -31,20 +31,12 @@ struct IslandView: View {
 
     private var expanded: some View {
         VStack(spacing: 0) {
+            // Под камерой экрана нет: первая половина вкладок слева от неё, остальные справа.
+            let half = (model.features.count + 1) / 2
             HStack(spacing: 6) {
-                ForEach(model.features, id: \.id) { feature in
-                    let selected = feature.id == model.selectedFeature?.id
-                    Button { withAnimation(Self.spring) { model.selectedFeatureID = feature.id } } label: {
-                        Label(feature.title, systemImage: feature.icon)
-                            .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                            .tracking(-0.12)
-                            .foregroundStyle(selected ? .white : Theme.muted)
-                            .padding(.horizontal, 10).padding(.vertical, 4)
-                            .background(Capsule().fill(selected ? Theme.tile : .clear))
-                    }
-                    .buttonStyle(PressStyle())
-                }
+                ForEach(model.features.prefix(half), id: \.id, content: tab)
                 Spacer(minLength: model.notch.width + 20) // центр занят камерой
+                ForEach(model.features.dropFirst(half), id: \.id, content: tab)
                 Button { NSApp.terminate(nil) } label: {
                     Image(systemName: "power").font(.system(size: 12))
                         .foregroundStyle(Theme.muted)
@@ -62,5 +54,18 @@ struct IslandView: View {
                 .padding(.top, 6)
                 .frame(maxHeight: .infinity)
         }
+    }
+
+    private func tab(_ feature: any IslandFeature) -> some View {
+        let selected = feature.id == model.selectedFeature?.id
+        return Button { withAnimation(Self.spring) { model.selectedFeatureID = feature.id } } label: {
+            Label(feature.title, systemImage: feature.icon)
+                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .tracking(-0.12)
+                .foregroundStyle(selected ? .white : Theme.muted)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(Capsule().fill(selected ? Theme.tile : .clear))
+        }
+        .buttonStyle(PressStyle())
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -14,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         features.forEach { $0.start() }
+        registerLoginItem()
 
         buildIslands()
         NotificationCenter.default.addObserver(
@@ -33,6 +35,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         features.forEach { $0.stop() }
+    }
+
+    /// Автозапуск при входе: один раз при первом запуске из /Applications (сборка из build/ не регистрируется).
+    /// Выключил в «Объектах входа» — повторно не включаем.
+    private func registerLoginItem() {
+        let key = "loginItemRegistered"
+        guard Bundle.main.bundlePath.hasPrefix("/Applications/"), !UserDefaults.standard.bool(forKey: key) else { return }
+        do {
+            try SMAppService.mainApp.register()
+            UserDefaults.standard.set(true, forKey: key)
+        } catch {
+            NSLog("BigIsland: автозапуск не включился: \(error)")
+        }
     }
 
     /// По острову на каждый экран (с вырезом и без).

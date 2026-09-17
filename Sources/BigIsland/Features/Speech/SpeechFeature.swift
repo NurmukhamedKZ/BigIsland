@@ -6,6 +6,7 @@ import SwiftUI
 /// Озвучка текста: вставил текст, и он зазвучал. Grok TTS через OpenRouter.
 /// Текст режется на фрагменты по предложениям: первый короткий, чтобы звук начался быстрее,
 /// следующие качаются заранее, но не больше чем на 2 фрагмента вперёд (не тратим деньги, если остановишь).
+/// Скачанный звук хранится, пока текст не изменился: «Повтор» играет его без новых запросов.
 @MainActor
 final class SpeechFeature: NSObject, ObservableObject, IslandFeature, AVAudioPlayerDelegate {
     let id = "speech"
@@ -24,45 +25,56 @@ final class SpeechFeature: NSObject, ObservableObject, IslandFeature, AVAudioPla
     @Published private(set) var chunkCount = 0
     @Published private(set) var error: String?
 
+    /// Фрагменты и их звук относятся к `spokenText`; новый текст — старая озвучка выбрасывается.
+    // ponytail: весь звук в памяти (~50 МБ на час mp3); на диск — если понадобится переживать перезапуск.
+    private var spokenText = ""
     private var chunks: [String] = []
     private var audio: [Int: Data] = [:]
-    private var nextFetch = 0
     private var fetching: Task<Void, Never>?
     private var player: AVAudioPlayer?
 
+    /// Текст в поле тот же, что уже озвучивали.
+    var canReplay: Bool { !chunks.isEmpty && text == spokenText }
+
     func start() {}
-    func stop() { reset() }
+    func stop() { stopPlayback() }
     func makeView() -> AnyView { AnyView(SpeechView(feature: self)) }
 
     // MARK: - Управление
 
+    /// «Озвучить» для нового текста, «Повтор» с начала для прежнего.
     func speak() {
-        reset()
-        chunks = Self.chunks(of: text)
+        if !canReplay {
+            fetching?.cancel()
+            fetching = nil
+            spokenText = text
+            chunks = Self.chunks(of: text)
+            audio = [:]
+            chunkCount = chunks.count
+        }
+        player?.stop()
+        player = nil
         guard !chunks.isEmpty else { return }
-        chunkCount = chunks.count
+        current = 0
         isActive = true
-        isLoading = true
+        isPaused = false
         error = nil
-        fetchMore()
+        playCurrent()
     }
 
     func togglePause() {
-        guard isActive else { speak(); return }
+        guard isActive else { return }
         isPaused.toggle()
         if isPaused { player?.pause() } else if let player { player.play() } else { playCurrent() }
     }
 
-    func reset() {
+    /// Останавливает звук и докачку. Скачанное остаётся для «Повтор».
+    func stopPlayback() {
         fetching?.cancel()
         fetching = nil
         player?.stop()
         player = nil
-        chunks = []
-        audio = [:]
-        nextFetch = 0
         current = 0
-        chunkCount = 0
         isActive = false
         isPaused = false
         isLoading = false
@@ -71,9 +83,9 @@ final class SpeechFeature: NSObject, ObservableObject, IslandFeature, AVAudioPla
     // MARK: - Загрузка и воспроизведение
 
     private func fetchMore() {
-        guard fetching == nil, nextFetch < chunks.count, nextFetch <= current + 2 else { return }
-        let index = nextFetch, chunk = chunks[index]
-        nextFetch += 1
+        guard isActive, fetching == nil,
+              let index = chunks.indices.first(where: { audio[$0] == nil }), index <= current + 2 else { return }
+        let chunk = chunks[index]
         fetching = Task {
             do {
                 let data = try await Self.synthesize(chunk)
@@ -84,14 +96,14 @@ final class SpeechFeature: NSObject, ObservableObject, IslandFeature, AVAudioPla
                 fetchMore()
             } catch {
                 guard !Task.isCancelled else { return }
-                reset()
+                stopPlayback()
                 self.error = error.localizedDescription
             }
         }
     }
 
     private func playCurrent() {
-        guard let data = audio.removeValue(forKey: current) else { isLoading = true; return } // ещё качается
+        guard let data = audio[current] else { isLoading = true; fetchMore(); return } // ещё качается
         do {
             let player = try AVAudioPlayer(data: data)
             player.delegate = self
@@ -100,7 +112,7 @@ final class SpeechFeature: NSObject, ObservableObject, IslandFeature, AVAudioPla
             isLoading = false
             fetchMore()
         } catch {
-            reset()
+            stopPlayback()
             self.error = "Не удалось проиграть звук"
         }
     }
@@ -110,7 +122,7 @@ final class SpeechFeature: NSObject, ObservableObject, IslandFeature, AVAudioPla
             guard finished === player else { return }
             player = nil
             current += 1
-            if current < chunks.count { playCurrent() } else { reset() }
+            if current < chunks.count { playCurrent() } else { stopPlayback() }
         }
     }
 
@@ -235,16 +247,13 @@ struct SpeechView: View {
                 Spacer(minLength: 0)
 
                 HStack(spacing: 10) {
-                    PillButton(title: playTitle, icon: feature.isActive && !feature.isPaused ? "pause.fill" : "play.fill",
-                               primary: true, action: feature.togglePause)
+                    PillButton(title: feature.canReplay ? "Повтор" : "Озвучить",
+                               icon: feature.canReplay ? "arrow.counterclockwise" : "play.fill",
+                               primary: true, action: feature.speak)
                     if feature.isActive {
-                        Button(action: feature.reset) {
-                            Image(systemName: "stop.fill").font(.system(size: 12))
-                                .foregroundStyle(Theme.muted)
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(PressStyle())
-                        .help("Остановить")
+                        iconButton(feature.isPaused ? "play.fill" : "pause.fill",
+                                   help: feature.isPaused ? "Дальше" : "Пауза", action: feature.togglePause)
+                        iconButton("stop.fill", help: "Остановить", action: feature.stopPlayback)
                     }
                 }
             }
@@ -259,8 +268,13 @@ struct SpeechView: View {
         return feature.isLoading ? "Загрузка · \(progress)" : "Звучит · \(progress)"
     }
 
-    private var playTitle: String {
-        guard feature.isActive else { return "Озвучить" }
-        return feature.isPaused ? "Дальше" : "Пауза"
+    private func iconButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 12))
+                .foregroundStyle(Theme.muted)
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(PressStyle())
+        .help(help)
     }
 }
