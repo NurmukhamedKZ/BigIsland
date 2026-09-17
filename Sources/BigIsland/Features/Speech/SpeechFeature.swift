@@ -1,6 +1,5 @@
 import AVFoundation
 import NaturalLanguage
-import Security
 import SwiftUI
 
 /// Озвучка текста: вставил текст, и он зазвучал. Grok TTS через OpenRouter.
@@ -134,7 +133,7 @@ final class SpeechFeature: NSObject, ObservableObject, IslandFeature, AVAudioPla
 
     nonisolated static func synthesize(_ text: String) async throws -> Data {
         guard let key = apiKey() else {
-            throw Failure(errorDescription: "Нет ключа OpenRouter. В терминале: security add-generic-password -s BigIsland -a openrouter -w")
+            throw Failure(errorDescription: "Нет ключа OpenRouter. Добавь строку OPENROUTER_API_KEY=… в ~/Library/Application Support/BigIsland/.env")
         }
         var request = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/audio/speech")!)
         request.httpMethod = "POST"
@@ -152,19 +151,28 @@ final class SpeechFeature: NSObject, ObservableObject, IslandFeature, AVAudioPla
         return data
     }
 
-    /// Ключ из связки ключей; переменная окружения — для запуска из терминала.
-    /// Читается не на главном потоке: при первом доступе macOS может спросить разрешение.
+    /// Ключ из `~/Library/Application Support/BigIsland/.env` (строка `OPENROUTER_API_KEY=…`);
+    /// переменная окружения — для запуска из терминала.
+    /// Не связка ключей: у ad-hoc подписи macOS спрашивает пароль после каждой пересборки.
     nonisolated static func apiKey() -> String? {
         if let key = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"] { return key }
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: "BigIsland",
-            kSecAttrAccount: "openrouter",
-            kSecReturnData: true,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
-        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BigIsland/.env")
+        guard let env = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        return envValue("OPENROUTER_API_KEY", in: env)
+    }
+
+    /// `KEY=value`, `KEY="value"`, `export KEY=value`; комментарии и пустые строки пропускаются.
+    nonisolated static func envValue(_ name: String, in env: String) -> String? {
+        for line in env.split(whereSeparator: \.isNewline) {
+            var line = line.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("export ") { line = String(line.dropFirst(7)).trimmingCharacters(in: .whitespaces) }
+            guard line.hasPrefix(name + "=") else { continue }
+            let value = line.dropFirst(name.count + 1).trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            return value.isEmpty ? nil : value
+        }
+        return nil
     }
 
     // MARK: - Нарезка

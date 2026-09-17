@@ -205,5 +205,8 @@ func selfTest() {
     let long = SpeechFeature.chunks(of: String(repeating: "а", count: 40), first: 10, rest: 15)
     precondition(long.map(\.count) == [15, 15, 10] && long.joined().count == 40, "\(long)")
     precondition(SpeechFeature.chunks(of: "  \n ").isEmpty)
+    let env = "# ключи\nOTHER=1\nexport OPENROUTER_API_KEY=\"sk-test\"\n"
+    precondition(SpeechFeature.envValue("OPENROUTER_API_KEY", in: env) == "sk-test")
+    precondition(SpeechFeature.envValue("OPENROUTER_API_KEY", in: "OPENROUTER_API_KEY=\n") == nil)
     print("selftest ok")
 }
