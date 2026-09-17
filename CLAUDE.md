@@ -29,6 +29,7 @@ pkill -x BigIsland; ./build.sh && open build/BigIsland.app
   - `IslandController`: borderless non-activating `NSPanel` at `.mainMenu + 3`, all Spaces + fullscreen. Notch size from `safeAreaInsets.top` and `auxiliaryTopLeft/RightArea`; screens without a notch get an invisible 200 pt zone.
   - Hover: collapsed → global monitor checks `hotRect` (notch). Expanded → `ignoresMouseEvents = false` and a 30 Hz timer polls `NSEvent.mouseLocation` against `expandedRect` (the global monitor doesn't see events over our own window). Doesn't collapse while a mouse button is pressed (drag in progress).
   - `FirstMouseHostingView` — clicks work without activating the app.
+  - `KeyPanel` (`canBecomeKey = true`) — text fields accept typing without activating the app. On collapse, if the panel is key, `orderOut` + `orderFrontRegardless` hands the keyboard back to the previous app.
 - `Island/IslandView.swift` — black `UnevenRoundedRectangle`-clipped shape; header row of feature tabs + quit button (center left empty for the camera); selected feature's `makeView()` below.
 - `Island/Theme.swift` — design tokens, spec in `DESIGN.md` (read it before any UI work): one accent `#2997ff` (fill `#0066cc` for primary pills), tile `#272729`, weights 400/600 only, radius 8 for cells/thumbnails, capsules for buttons, `PressStyle` (scale 0.95), no shadows. Use these tokens in new UI.
 - `Features/IslandFeature.swift` — protocol: `id`, `title`, `icon` (SF Symbol), `contentHeight` (default 150), `start()`, `stop()`, `makeView() -> AnyView`. `@MainActor`. Tab switch animates height with `IslandView.spring`.
@@ -43,6 +44,8 @@ pkill -x BigIsland; ./build.sh && open build/BigIsland.app
   - Persistence: `~/Library/Application Support/BigIsland/pomodoro.json` = `{days: {"yyyy-MM-dd": seconds}, session}`. Atomic writes on every phase change and every 60 s during study (`flush`, split across midnights by `split`). On decode failure: back up to `pomodoro.broken-*.json` and set `canSave = false` — **never overwrite history**.
   - On launch, a study gap > 120 s since `lastFlush` is not counted.
 - `Features/Pomodoro/PomodoroView.swift` — `TimelineView` 1 Hz stopwatch (no per-second `@Published`), ISO-week month calendar (`Calendar(identifier: .iso8601)`), cells show studied time instead of the day number. Colors: study = `Theme.accent`, rest = `Theme.muted`.
+- `Features/Speech/SpeechFeature.swift` — TTS: `x-ai/grok-voice-tts-1.0` (voice `eve`, mp3) via OpenRouter `/api/v1/audio/speech`. A paste into the `TextEditor` (text grows by >1 UTF-16 unit) starts speaking. Text is split by `NLTokenizer` sentences into chunks (first ≤ 200 chars for a fast start, then ≤ 1500), fetched sequentially at most 2 chunks ahead of playback, played one by one with `AVAudioPlayer`. Key: env `OPENROUTER_API_KEY`, otherwise Keychain generic password service `BigIsland`, account `openrouter` (read off the main thread). The model was chosen by the user after comparing samples in `tts-compare/compare.sh`.
+- `PillButton` (in `Theme.swift`) — shared primary/secondary capsule button.
 
 ## Invariants — don't break these
 

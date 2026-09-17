@@ -63,7 +63,7 @@ final class IslandController {
             height: size.height + Self.shadowPadding
         )
 
-        panel = NSPanel(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel = KeyPanel(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -120,6 +120,11 @@ final class IslandController {
         trackTimer = nil
         panel.ignoresMouseEvents = true
         model.isExpanded = false
+        // Клавиатура возвращается приложению, в котором работали до клика по острову.
+        if panel.isKeyWindow {
+            panel.orderOut(nil)
+            panel.orderFrontRegardless()
+        }
     }
 
     // MARK: - Геометрия экрана
@@ -134,6 +139,11 @@ final class IslandController {
     private static func fakeNotch(of screen: NSScreen) -> CGSize {
         CGSize(width: 200, height: max(screen.frame.maxY - screen.visibleFrame.maxY, 24))
     }
+}
+
+/// Без этого borderless-окно не принимает ввод с клавиатуры. Приложение при этом не активируется (nonactivatingPanel).
+final class KeyPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
 }
 
 /// Клики срабатывают сразу, даже если приложение неактивно.

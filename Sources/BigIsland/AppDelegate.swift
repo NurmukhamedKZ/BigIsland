@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let features: [any IslandFeature] = [
         ScreenshotsFeature(),
         PomodoroFeature(),
+        SpeechFeature(),
     ]
 
     private var islands: [IslandController] = []

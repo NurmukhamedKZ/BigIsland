@@ -199,5 +199,11 @@ func selfTest() {
     precondition(parts.map(\.key) == ["2026-09-16", "2026-09-17"], "\(parts)")
     precondition(parts.map(\.seconds) == [30 * 60, 45 * 60], "\(parts)")
     precondition(PomodoroFeature.split(from: end, to: end, calendar: cal).isEmpty)
+
+    let chunks = SpeechFeature.chunks(of: "Раз. Два два. Три три три.  \n\nЧетыре.", first: 8, rest: 16)
+    precondition(chunks == ["Раз.", "Два два.", "Три три три.", "Четыре."], "\(chunks)")
+    let long = SpeechFeature.chunks(of: String(repeating: "а", count: 40), first: 10, rest: 15)
+    precondition(long.map(\.count) == [15, 15, 10] && long.joined().count == 40, "\(long)")
+    precondition(SpeechFeature.chunks(of: "  \n ").isEmpty)
     print("selftest ok")
 }

@@ -118,27 +118,6 @@ private struct RoundDots: View {
     }
 }
 
-/// Основная — синяя капсула с белым текстом, вторичная — контурная капсула.
-private struct PillButton: View {
-    let title: String
-    let icon: String
-    let primary: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(.system(size: 14))
-                .tracking(-0.224)
-                .foregroundStyle(primary ? .white : Theme.accent)
-                .padding(.horizontal, 16).padding(.vertical, 6)
-                .background(Capsule().fill(primary ? Theme.action : .clear))
-                .overlay(Capsule().strokeBorder(primary ? .clear : Theme.accent, lineWidth: 1))
-        }
-        .buttonStyle(PressStyle())
-    }
-}
-
 /// «2ч 15м», «45м»
 private func duration(_ seconds: TimeInterval) -> String {
     let m = Int(seconds) / 60

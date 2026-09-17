@@ -21,6 +21,27 @@ extension Color {
     }
 }
 
+/// Основная — синяя капсула с белым текстом, вторичная — контурная капсула.
+struct PillButton: View {
+    let title: String
+    let icon: String
+    let primary: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 14))
+                .tracking(-0.224)
+                .foregroundStyle(primary ? .white : Theme.accent)
+                .padding(.horizontal, 16).padding(.vertical, 6)
+                .background(Capsule().fill(primary ? Theme.action : .clear))
+                .overlay(Capsule().strokeBorder(primary ? .clear : Theme.accent, lineWidth: 1))
+        }
+        .buttonStyle(PressStyle())
+    }
+}
+
 /// Наведение — светлая подложка, нажатие — сжатие до 0.95.
 struct PressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
