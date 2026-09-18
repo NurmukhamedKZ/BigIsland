@@ -209,14 +209,27 @@ final class SpeechFeature: NSObject, ObservableObject, IslandFeature, AVAudioPla
 
 struct SpeechView: View {
     @ObservedObject var feature: SpeechFeature
+    @FocusState private var editorFocused: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 18) {
             TextEditor(text: $feature.text)
                 .font(.system(size: 14))
                 .scrollContentBackground(.hidden)
+                .focused($editorFocused)
                 .padding(8)
-                .background(Theme.tile, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                .background {
+                    // Клик по отступу вокруг редактора тоже ставит курсор в поле: активна вся плитка.
+                    RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.tile)
+                        .onTapGesture {
+                            NSApp.currentEvent?.window?.makeKey() // иначе клавиатура не дойдёт до панели
+                            editorFocused = true
+                        }
+                }
+                // Приложение не активно, курсорные зоны AppKit не срабатывают — ставим I-курсор сами.
+                .onContinuousHover { phase in
+                    if case .active = phase { NSCursor.iBeam.set() } else { NSCursor.arrow.set() }
+                }
                 .overlay(alignment: .topLeading) {
                     if feature.text.isEmpty {
                         Label("Вставь текст, и он зазвучит", systemImage: "waveform")

@@ -144,6 +144,23 @@ final class IslandController {
 /// Без этого borderless-окно не принимает ввод с клавиатуры. Приложение при этом не активируется (nonactivatingPanel).
 final class KeyPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    /// У приложения нет меню «Правка», поэтому ⌘V/⌘C/⌘X/⌘A/⌘Z сами не доходят до текстового поля.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // Коды клавиш, а не символы: на русской раскладке ⌘V даёт «м».
+        let action: Selector? = switch (flags, event.keyCode) {
+        case (.command, 9): #selector(NSText.paste(_:))
+        case (.command, 8): #selector(NSText.copy(_:))
+        case (.command, 7): #selector(NSText.cut(_:))
+        case (.command, 0): #selector(NSText.selectAll(_:))
+        case (.command, 6): Selector(("undo:"))
+        case ([.command, .shift], 6): Selector(("redo:"))
+        default: nil
+        }
+        if let action, NSApp.sendAction(action, to: nil, from: self) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 /// Клики срабатывают сразу, даже если приложение неактивно.
