@@ -21,9 +21,10 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>CFBundleExecutable</key><string>BigIsland</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1</string>
-    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSMinimumSystemVersion</key><string>14.4</string>
     <key>LSUIElement</key><true/>
     <key>NSDocumentsFolderUsageDescription</key><string>Чтобы показывать новые скриншоты на острове.</string>
+    <key>NSAudioCaptureUsageDescription</key><string>Чтобы менять громкость отдельных приложений.</string>
     <key>NSDesktopFolderUsageDescription</key><string>Чтобы показывать новые скриншоты на острове.</string>
 </dict>
 </plist>

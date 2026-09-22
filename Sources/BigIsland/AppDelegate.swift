@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SpeechFeature(),
         LayoutFeature(),
         AwakeFeature(),
+        MixerFeature(),
     ]
 
     private var islands: [IslandController] = []
