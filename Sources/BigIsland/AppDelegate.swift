@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TypeClipFeature(),
         SpeechFeature(),
         LayoutFeature(),
+        AwakeFeature(),
     ]
 
     private var islands: [IslandController] = []

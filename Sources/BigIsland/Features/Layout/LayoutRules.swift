@@ -138,7 +138,8 @@ enum LayoutRules {
         "ru": ["не", "на", "то", "по", "но", "за", "из", "от", "до", "он", "же", "мы", "вы", "ты", "да", "ну", "уж",
                "ли", "бы", "её", "их", "ей", "им", "ко", "со", "во", "об"],
         "en": ["to", "of", "in", "it", "is", "be", "as", "at", "so", "we", "he", "by", "or", "on", "do", "if", "me",
-               "my", "up", "an", "go", "no", "us", "am", "hi", "ok"],
+               "my", "up", "an", "go", "no", "us", "am", "hi", "ok",
+               "cd", "ls", "rm", "mv", "cp", "ps"], // команды терминала: «св ..» → «cd ..»
     ]
 
     /// Слова, которых нет в системном словаре, но которые печатают постоянно.
@@ -148,6 +149,7 @@ enum LayoutRules {
             api async await bash brew cli config css csv curl docker env git github gitlab grep html http https ios
             json jwt kubectl localhost macos nginx npm npx pnpm postgres regex repo sdk sql ssh sudo swift swiftui
             tmux url utf vscode xcode yaml yml zsh claude cursor typescript javascript nodejs frontend backend
+            pwd mkdir rmdir chmod chown pip
             """.split(whereSeparator: \.isWhitespace).map(String.init)),
         "ru": ["баг", "баги", "бэкенд", "фронтенд", "коммит", "пуш", "мерж", "деплой", "релиз", "линтер", "кэш"],
     ]
@@ -311,7 +313,11 @@ func layoutSelfTest() {
     check("b ghbdtn ", "b привет ", code: true)         // в коде «b» — скорее переменная
 
     // Встроенные слова не должны перекрывать настоящие русские («vue» читается как «мгу»).
-    for word in ["api", "npm", "git", "json", "swift", "zsh", "kubectl", "claude", "cursor"] {
+    precondition(toEn("cd") && toEn("cd", code: true) && toEn("ls", code: true) && toEn("pwd", code: true)) // св → cd
+    precondition(!toRu("cd") && !toRu("ls", code: true))
+    check("cd ", "cd ")
+    for word in ["api", "npm", "git", "json", "swift", "zsh", "kubectl", "claude", "cursor",
+                 "cd", "ls", "rm", "mv", "cp", "ps", "pwd", "mkdir", "rmdir", "chmod", "chown", "pip"] {
         precondition(!LayoutRules.isWord(ru.translate(keys(word)), lang: "ru"), "\(word) перекрывает русское слово")
     }
 }

@@ -74,32 +74,41 @@ struct IslandView: View {
     }
 
     private var featureList: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(model.features, id: \.id) { feature in
-                let selected = feature.id == model.selectedFeature?.id
-                Button {
-                    withAnimation(Self.spring) {
-                        model.selectedFeatureID = feature.id
-                        model.menuOpen = false
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: feature.icon).frame(width: 16)
-                        Text(feature.title)
-                        Spacer(minLength: 0)
-                        if selected { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
-                    }
-                    .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                    .tracking(-0.12)
-                    .foregroundStyle(selected ? .white : Theme.muted)
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .frame(width: 200)
-                    .background(RoundedRectangle(cornerRadius: Theme.radius).fill(selected ? Theme.tile : .clear))
+        // Колонки по 5 (больше в высоту не влезает): шестая и дальше — правее.
+        let all = model.features
+        let columns = stride(from: 0, to: all.count, by: 5).map { Array(all[$0..<min($0 + 5, all.count)]) }
+        return HStack(alignment: .top, spacing: 8) {
+            ForEach(columns.indices, id: \.self) { column in
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(columns[column], id: \.id) { featureRow($0) }
                 }
-                .buttonStyle(PressStyle())
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .transition(.opacity)
+    }
+
+    private func featureRow(_ feature: any IslandFeature) -> some View {
+        let selected = feature.id == model.selectedFeature?.id
+        return Button {
+            withAnimation(Self.spring) {
+                model.selectedFeatureID = feature.id
+                model.menuOpen = false
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: feature.icon).frame(width: 16)
+                Text(feature.title)
+                Spacer(minLength: 0)
+                if selected { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
+            }
+            .font(.system(size: 12, weight: selected ? .semibold : .regular))
+            .tracking(-0.12)
+            .foregroundStyle(selected ? .white : Theme.muted)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .frame(width: 200)
+            .background(RoundedRectangle(cornerRadius: Theme.radius).fill(selected ? Theme.tile : .clear))
+        }
+        .buttonStyle(PressStyle())
     }
 }
