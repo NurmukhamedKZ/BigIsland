@@ -1,5 +1,4 @@
 import AppKit
-import IOKit.ps
 import SwiftUI
 
 /// Аналог Amphetamine: Mac не засыпает, даже с закрытой крышкой (можно убрать в сумку).
@@ -11,18 +10,14 @@ final class AwakeFeature: ObservableObject, IslandFeature {
     let title = "Не спать"
     let icon = "cup.and.saucer"
 
-    /// На батарее ниже этого — выключаемся сами, чтобы Mac в сумке успел уснуть, а не умер.
-    nonisolated static let minBattery = 10
     nonisolated static let sudoers = "/etc/sudoers.d/bigisland"
 
     @Published private(set) var isOn = false
     @Published private(set) var busy = false
     @Published private(set) var error: String?
-    private var batteryTimer: Timer?
 
     func start() {
         isOn = Self.sleepDisabled()
-        if isOn { watchBattery() }
     }
 
     /// Выход из приложения не должен оставить Mac вечно бодрствующим.
@@ -35,10 +30,6 @@ final class AwakeFeature: ObservableObject, IslandFeature {
 
     func toggle() {
         let on = !isOn
-        if on, let level = Self.batteryLevel(), level < Self.minBattery {
-            error = "Батарея \(level)% — подключи зарядку"
-            return
-        }
         busy = true
         error = nil
         // Окно пароля блокирует поток — не на главном.
@@ -53,18 +44,6 @@ final class AwakeFeature: ObservableObject, IslandFeature {
         busy = false
         isOn = on
         error = failure
-        if on { watchBattery() } else { batteryTimer?.invalidate(); batteryTimer = nil }
-    }
-
-    private func watchBattery() {
-        batteryTimer?.invalidate()
-        batteryTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, let level = Self.batteryLevel(), level < Self.minBattery else { return }
-                _ = Self.pmset(false, allowPrompt: false)
-                self.apply(Self.sleepDisabled(), failure: "Выключено: батарея \(level)%")
-            }
-        }
     }
 
     // MARK: - Система
@@ -95,19 +74,6 @@ final class AwakeFeature: ObservableObject, IslandFeature {
         }
     }
 
-    /// Процент батареи, если питаемся от неё; nil — от сети или батареи нет.
-    nonisolated static func batteryLevel() -> Int? {
-        let info = IOPSCopyPowerSourcesInfo().takeRetainedValue()
-        let list = IOPSCopyPowerSourcesList(info).takeRetainedValue() as [CFTypeRef]
-        for source in list {
-            guard let desc = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any],
-                  desc[kIOPSPowerSourceStateKey] as? String == kIOPSBatteryPowerValue,
-                  let level = desc[kIOPSCurrentCapacityKey] as? Int else { continue }
-            return level
-        }
-        return nil
-    }
-
     nonisolated private static func run(_ path: String, _ args: [String]) -> (status: Int32, output: String) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
@@ -133,8 +99,7 @@ struct AwakeView: View {
             Text(feature.isOn ? "Mac не уснёт" : "Обычный сон")
                 .font(.system(size: 14, weight: .semibold)).tracking(-0.224)
                 .foregroundStyle(feature.isOn ? Theme.accent : Theme.muted)
-            Text("Даже с закрытой крышкой — можно убрать в сумку. Экран гаснет, всё остальное работает. "
-                 + "На батарее ниже \(AwakeFeature.minBattery)% выключится само.")
+            Text("Даже с закрытой крышкой — можно убрать в сумку. Экран гаснет, всё остальное работает.")
                 .font(.system(size: 12)).tracking(-0.12)
                 .foregroundStyle(Theme.muted)
             if let error = feature.error {
