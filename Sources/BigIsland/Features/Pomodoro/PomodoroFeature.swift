@@ -98,6 +98,14 @@ final class PomodoroFeature: ObservableObject, IslandFeature {
         phaseChanged()
     }
 
+    /// Ручная правка дня (забыл включить или выключить). Хвост текущей учёбы сперва записываем,
+    /// чтобы введённое значение было точным «на сейчас»; дальше учёба считается как обычно.
+    func setStudied(_ seconds: TimeInterval, on key: String) {
+        flush()
+        days[key] = seconds > 0 ? seconds : nil
+        save()
+    }
+
     /// Учёба за день, включая ещё не записанный хвост текущей сессии.
     func studied(on key: String, now: Date = Date()) -> TimeInterval {
         let saved = days[key] ?? 0

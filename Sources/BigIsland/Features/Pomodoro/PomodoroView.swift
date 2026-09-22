@@ -12,7 +12,7 @@ struct PomodoroView: View {
             TimerPanel(feature: feature)
                 .frame(width: 220)
             Rectangle().fill(Theme.hairline).frame(width: 1)
-            StudyCalendar(days: feature.days)
+            StudyCalendar(feature: feature)
         }
     }
 }
@@ -127,8 +127,15 @@ private func duration(_ seconds: TimeInterval) -> String {
 // MARK: - Календарь месяца
 
 private struct StudyCalendar: View {
-    let days: [String: TimeInterval]
+    @ObservedObject var feature: PomodoroFeature
     @State private var month = Date()
+    /// День, для которого открыта ручная правка (двойной клик по ячейке).
+    @State private var editing: Date?
+    @State private var hours = ""
+    @State private var minutes = ""
+    @FocusState private var hoursFocused: Bool
+
+    private var days: [String: TimeInterval] { feature.days }
 
     private static let calendar: Calendar = {
         var c = Calendar(identifier: .iso8601) // неделя с понедельника, ISO-номера недель
@@ -143,6 +150,13 @@ private struct StudyCalendar: View {
         return f
     }()
 
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ru_RU")
+        f.dateFormat = "d MMMM"
+        return f
+    }()
+
     var body: some View {
         let cal = Self.calendar
         let first = cal.date(from: cal.dateComponents([.year, .month], from: month))!
@@ -152,21 +166,10 @@ private struct StudyCalendar: View {
             .reduce(0) { $0 + (days[PomodoroFeature.dayKey($1, calendar: cal)] ?? 0) }
 
         VStack(spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("\(Self.monthFormatter.string(from: first).capitalized) \(String(cal.component(.year, from: first)))")
-                    .font(.system(size: 17, weight: .semibold))
-                    .tracking(-0.374)
-                Text(duration(monthTotal))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.faint)
-                Spacer()
-                navButton("chevron.left") { shift(-1) }
-                Button { month = Date() } label: {
-                    Text("Сегодня").font(.system(size: 12)).tracking(-0.12)
-                        .foregroundStyle(Theme.accent)
-                }
-                .buttonStyle(PressStyle())
-                navButton("chevron.right") { shift(1) }
+            if let editing {
+                editor(editing)
+            } else {
+                header(first: first, monthTotal: monthTotal)
             }
 
             Grid(horizontalSpacing: 2, verticalSpacing: 2) {
@@ -197,6 +200,73 @@ private struct StudyCalendar: View {
         .foregroundStyle(.white)
     }
 
+    private func header(first: Date, monthTotal: TimeInterval) -> some View {
+        let cal = Self.calendar
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("\(Self.monthFormatter.string(from: first).capitalized) \(String(cal.component(.year, from: first)))")
+                .font(.system(size: 17, weight: .semibold))
+                .tracking(-0.374)
+            Text(duration(monthTotal))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.faint)
+            Spacer()
+            navButton("chevron.left") { shift(-1) }
+            Button { month = Date() } label: {
+                Text("Сегодня").font(.system(size: 12)).tracking(-0.12)
+                    .foregroundStyle(Theme.accent)
+            }
+            .buttonStyle(PressStyle())
+            navButton("chevron.right") { shift(1) }
+        }
+    }
+
+    /// Ручной ввод учёбы за день: часы + минуты, Enter — сохранить, Esc — отмена.
+    private func editor(_ date: Date) -> some View {
+        HStack(spacing: 6) {
+            Text(Self.dayFormatter.string(from: date))
+                .font(.system(size: 17, weight: .semibold))
+                .tracking(-0.374)
+            Spacer()
+            field($hours, unit: "ч").focused($hoursFocused)
+            field($minutes, unit: "м")
+            navButton("checkmark") { commit(date) }
+            navButton("xmark") { editing = nil }
+        }
+        .onExitCommand { editing = nil }
+    }
+
+    private func field(_ text: Binding<String>, unit: String) -> some View {
+        HStack(spacing: 2) {
+            TextField("0", text: text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14, weight: .semibold))
+                .monospacedDigit()
+                .multilineTextAlignment(.trailing)
+                .frame(width: 24)
+                .onSubmit { if let editing { commit(editing) } }
+            Text(unit).font(.system(size: 12)).foregroundStyle(Theme.faint)
+        }
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .background(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.tile))
+    }
+
+    private func beginEdit(_ date: Date) {
+        let m = Int(feature.studied(on: PomodoroFeature.dayKey(date, calendar: Self.calendar))) / 60
+        hours = String(m / 60)
+        minutes = String(m % 60)
+        editing = date
+        NSApp.currentEvent?.window?.makeKey() // иначе клавиатура не дойдёт до панели
+        hoursFocused = true
+    }
+
+    private func commit(_ date: Date) {
+        let h = Int(hours.trimmingCharacters(in: .whitespaces)) ?? 0
+        let m = Int(minutes.trimmingCharacters(in: .whitespaces)) ?? 0
+        let seconds = TimeInterval(min(max(h * 60 + m, 0), 24 * 60) * 60) // не больше суток
+        feature.setStudied(seconds, on: PomodoroFeature.dayKey(date, calendar: Self.calendar))
+        editing = nil
+    }
+
     private func dayCell(_ date: Date, month: Date) -> some View {
         let cal = Self.calendar
         let seconds = days[PomodoroFeature.dayKey(date, calendar: cal)] ?? 0
@@ -212,7 +282,10 @@ private struct StudyCalendar: View {
             .frame(maxWidth: .infinity, minHeight: 25)
             .background(shape.fill(studied ? Theme.tile : .clear))
             .overlay(shape.strokeBorder(isToday ? Theme.accent : .clear, lineWidth: 2))
+            .overlay(shape.strokeBorder(editing.map { cal.isDate($0, inSameDayAs: date) } == true ? .white : .clear, lineWidth: 1))
             .opacity(cal.isDate(date, equalTo: month, toGranularity: .month) ? 1 : 0.35)
+            .contentShape(shape)
+            .onTapGesture(count: 2) { beginEdit(date) }
     }
 
     /// «2ч15м», «45м» — влезает в узкую ячейку.
