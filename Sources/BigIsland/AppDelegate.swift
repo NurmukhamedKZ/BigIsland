@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let features: [any IslandFeature] = [
         ScreenshotsFeature(),
         PomodoroFeature(),
+        TypeClipFeature(),
         SpeechFeature(),
     ]
 
