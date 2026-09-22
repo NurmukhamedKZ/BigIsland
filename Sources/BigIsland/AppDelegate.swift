@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PomodoroFeature(),
         TypeClipFeature(),
         SpeechFeature(),
+        LayoutFeature(),
     ]
 
     private var islands: [IslandController] = []

@@ -216,5 +216,6 @@ func selfTest() {
     let env = "# ключи\nOTHER=1\nexport OPENROUTER_API_KEY=\"sk-test\"\n"
     precondition(SpeechFeature.envValue("OPENROUTER_API_KEY", in: env) == "sk-test")
     precondition(SpeechFeature.envValue("OPENROUTER_API_KEY", in: "OPENROUTER_API_KEY=\n") == nil)
+    MainActor.assumeIsolated { layoutSelfTest() }
     print("selftest ok")
 }

@@ -5,6 +5,8 @@ import SwiftUI
 final class IslandModel: ObservableObject {
     @Published var isExpanded = false
     @Published var selectedFeatureID: String?
+    /// Открыт список фич вместо содержимого вкладки.
+    @Published var menuOpen = false
 
     let features: [any IslandFeature]
     let notch: CGSize
@@ -120,6 +122,7 @@ final class IslandController {
         trackTimer = nil
         panel.ignoresMouseEvents = true
         model.isExpanded = false
+        model.menuOpen = false
         // Клавиатура возвращается приложению, в котором работали до клика по острову.
         if panel.isKeyWindow {
             panel.orderOut(nil)

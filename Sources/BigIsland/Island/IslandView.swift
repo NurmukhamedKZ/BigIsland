@@ -31,12 +31,9 @@ struct IslandView: View {
 
     private var expanded: some View {
         VStack(spacing: 0) {
-            // Под камерой экрана нет: первая половина вкладок слева от неё, остальные справа.
-            let half = (model.features.count + 1) / 2
             HStack(spacing: 6) {
-                ForEach(model.features.prefix(half), id: \.id, content: tab)
+                menuButton
                 Spacer(minLength: model.notch.width + 20) // центр занят камерой
-                ForEach(model.features.dropFirst(half), id: \.id, content: tab)
                 Button { NSApp.terminate(nil) } label: {
                     Image(systemName: "power").font(.system(size: 12))
                         .foregroundStyle(Theme.muted)
@@ -48,24 +45,61 @@ struct IslandView: View {
             .frame(height: model.notch.height)
             .padding(.horizontal, 16)
 
-            model.selectedFeature?.makeView()
-                .padding(.horizontal, 16)
-                .padding(.bottom, 14)
-                .padding(.top, 6)
-                .frame(maxHeight: .infinity)
+            Group {
+                if model.menuOpen { featureList } else { model.selectedFeature?.makeView() }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 14)
+            .padding(.top, 6)
+            .frame(maxHeight: .infinity)
         }
     }
 
-    private func tab(_ feature: any IslandFeature) -> some View {
-        let selected = feature.id == model.selectedFeature?.id
-        return Button { withAnimation(Self.spring) { model.selectedFeatureID = feature.id } } label: {
-            Label(feature.title, systemImage: feature.icon)
-                .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                .tracking(-0.12)
-                .foregroundStyle(selected ? .white : Theme.muted)
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(Capsule().fill(selected ? Theme.tile : .clear))
+    /// Одна кнопка вместо вкладок: текущая фича, по нажатию — список всех.
+    private var menuButton: some View {
+        let feature = model.selectedFeature
+        return Button { withAnimation(.easeOut(duration: 0.15)) { model.menuOpen.toggle() } } label: {
+            HStack(spacing: 5) {
+                Label(feature?.title ?? "", systemImage: feature?.icon ?? "square.grid.2x2")
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(model.menuOpen ? 180 : 0))
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .tracking(-0.12)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Capsule().fill(Theme.tile))
         }
         .buttonStyle(PressStyle())
+    }
+
+    private var featureList: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(model.features, id: \.id) { feature in
+                let selected = feature.id == model.selectedFeature?.id
+                Button {
+                    withAnimation(Self.spring) {
+                        model.selectedFeatureID = feature.id
+                        model.menuOpen = false
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: feature.icon).frame(width: 16)
+                        Text(feature.title)
+                        Spacer(minLength: 0)
+                        if selected { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
+                    }
+                    .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                    .tracking(-0.12)
+                    .foregroundStyle(selected ? .white : Theme.muted)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .frame(width: 200)
+                    .background(RoundedRectangle(cornerRadius: Theme.radius).fill(selected ? Theme.tile : .clear))
+                }
+                .buttonStyle(PressStyle())
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .transition(.opacity)
     }
 }
