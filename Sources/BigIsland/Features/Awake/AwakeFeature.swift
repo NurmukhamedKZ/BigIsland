@@ -15,6 +15,10 @@ final class AwakeFeature: ObservableObject, IslandFeature {
     @Published private(set) var isOn = false
     @Published private(set) var busy = false
     @Published private(set) var error: String?
+    /// Сколько часов не спать; 0 — без ограничения.
+    @Published var hours = 0 { didSet { schedule() } }
+    @Published private(set) var until: Date?
+    private var timer: Timer?
 
     func start() {
         isOn = Self.sleepDisabled()
@@ -44,6 +48,24 @@ final class AwakeFeature: ObservableObject, IslandFeature {
         busy = false
         isOn = on
         error = failure
+        schedule()
+    }
+
+    /// Таймер отсчитывается от момента включения или смены срока. Mac не спит — таймер точно сработает.
+    /// ponytail: срок только в памяти — после перезапуска приложения сон отключён без ограничения.
+    private func schedule() {
+        timer?.invalidate()
+        timer = nil
+        until = nil
+        guard isOn, hours > 0 else { return }
+        let seconds = TimeInterval(hours * 3600)
+        until = Date().addingTimeInterval(seconds)
+        timer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isOn, !self.busy else { return }
+                self.toggle()
+            }
+        }
     }
 
     // MARK: - Система
@@ -96,7 +118,7 @@ struct AwakeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(feature.isOn ? "Mac не уснёт" : "Обычный сон")
+            Text(feature.isOn ? feature.until.map { "Mac не уснёт до \($0.formatted(date: .omitted, time: .shortened))" } ?? "Mac не уснёт" : "Обычный сон")
                 .font(.system(size: 14, weight: .semibold)).tracking(-0.224)
                 .foregroundStyle(feature.isOn ? Theme.accent : Theme.muted)
             Text("Даже с закрытой крышкой — можно убрать в сумку. Экран гаснет, всё остальное работает.")
@@ -110,9 +132,23 @@ struct AwakeView: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
-            PillButton(title: feature.isOn ? "Выключить" : "Не спать", icon: feature.isOn ? "moon.fill" : "cup.and.saucer.fill",
-                       primary: !feature.isOn, action: feature.toggle)
-                .disabled(feature.busy)
+            HStack(spacing: 6) {
+                PillButton(title: feature.isOn ? "Выключить" : "Не спать", icon: feature.isOn ? "moon.fill" : "cup.and.saucer.fill",
+                           primary: !feature.isOn, action: feature.toggle)
+                    .disabled(feature.busy)
+                Spacer(minLength: 0)
+                ForEach([0, 1, 2, 4, 8], id: \.self) { h in
+                    Button { feature.hours = h } label: {
+                        Text(h == 0 ? "∞" : "\(h) ч")
+                            .font(.system(size: 12, weight: feature.hours == h ? .semibold : .regular)).tracking(-0.12)
+                            .foregroundStyle(feature.hours == h ? Theme.accent : Theme.muted)
+                            .frame(minWidth: 26)
+                            .padding(.horizontal, 6).padding(.vertical, 4)
+                            .background(Capsule().fill(feature.hours == h ? Theme.tile : .clear))
+                    }
+                    .buttonStyle(PressStyle())
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
