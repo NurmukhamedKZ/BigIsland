@@ -19,10 +19,14 @@ final class LayoutFeature: ObservableObject, IslandFeature {
     @Published private(set) var codeMode = false
     @Published private(set) var lastFix: String?
     @Published private(set) var exceptions = Set(UserDefaults.standard.stringArray(forKey: Keys.exceptions) ?? [])
+    /// Ручной выбор режима кода: bundle id → вкл/выкл, перекрывает встроенный список `codeApps`.
+    private var codeOverrides = UserDefaults.standard.dictionary(forKey: Keys.codeOverrides) as? [String: Bool] ?? [:]
+    private var frontBundle = ""
 
     private enum Keys {
         static let enabled = "layout.enabled"
         static let exceptions = "layout.exceptions"
+        static let codeOverrides = "layout.codeOverrides"
     }
 
     nonisolated static let marker: Int64 = 0x4249_534C // наши собственные нажатия
@@ -74,8 +78,21 @@ final class LayoutFeature: ObservableObject, IslandFeature {
         reset()
         let app = NSWorkspace.shared.frontmostApplication
         frontApp = app?.localizedName ?? ""
-        let bundle = app?.bundleIdentifier ?? ""
-        codeMode = Self.codeApps.contains(bundle) || bundle.hasPrefix("com.jetbrains.")
+        frontBundle = app?.bundleIdentifier ?? ""
+        codeMode = Self.isCodeApp(frontBundle, overrides: codeOverrides)
+    }
+
+    static func isCodeApp(_ bundle: String, overrides: [String: Bool]) -> Bool {
+        overrides[bundle] ?? (codeApps.contains(bundle) || bundle.hasPrefix("com.jetbrains."))
+    }
+
+    /// Включить/выключить режим кода для текущего приложения. Совпало со встроенным списком — убираем запись.
+    func toggleCodeMode() {
+        guard !frontBundle.isEmpty else { return }
+        codeOverrides[frontBundle] = !codeMode
+        if Self.isCodeApp(frontBundle, overrides: [:]) == !codeMode { codeOverrides[frontBundle] = nil }
+        UserDefaults.standard.set(codeOverrides, forKey: Keys.codeOverrides)
+        codeMode.toggle()
     }
 
     // MARK: - Перехват клавиш
@@ -242,9 +259,14 @@ struct LayoutView: View {
                     .font(.system(size: 14, weight: .semibold)).tracking(-0.224)
                     .foregroundStyle(feature.enabled && feature.hasAccess ? Theme.accent : Theme.muted)
                 if !feature.frontApp.isEmpty {
-                    Text(feature.codeMode ? "\(feature.frontApp) · режим кода" : feature.frontApp)
-                        .font(.system(size: 12)).tracking(-0.12)
-                        .foregroundStyle(Theme.faint)
+                    // Клик — включить/выключить режим кода для этого приложения.
+                    Button(action: feature.toggleCodeMode) {
+                        Label("\(feature.frontApp) · режим кода",
+                              systemImage: feature.codeMode ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 12)).tracking(-0.12)
+                            .foregroundStyle(feature.codeMode ? Theme.accent : Theme.faint)
+                    }
+                    .buttonStyle(PressStyle())
                 }
                 Spacer(minLength: 0)
                 if let fix = feature.lastFix {

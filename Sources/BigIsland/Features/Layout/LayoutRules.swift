@@ -58,7 +58,7 @@ struct KeyLayout {
 /// Решение «набрано не в той раскладке?». Идеи из открытых переключателей (layout-switcher, RuSwitcher, KeySwitcher):
 /// слово — это нажатия; меняем, только если как набрано — не слово, а в другой раскладке — слово системного словаря.
 /// Словарь не знает ни того, ни другого (жаргон, формы: «ltdjgcjd» — «девопсов») — решает статистика троек букв.
-/// Двухбуквенные — только по списку частых (словарь на двух буквах врёт). Одиночные буквы сами по себе не трогаем.
+/// Двухбуквенные — только по списку частых (словарь на двух буквах врёт). Одиночные — «z» → «я», «d» → «в», но не в коде.
 @MainActor
 enum LayoutRules {
     /// `code` — строгий режим (редакторы и терминалы): английское не превращаем в русское,
@@ -66,6 +66,11 @@ enum LayoutRules {
     static func shouldSwitch(typed: String, meant: String, from: String, to: String,
                              code: Bool = false, exceptions: Set<String> = []) -> Bool {
         let word = core(typed), other = core(meant)
+        if word.count == 1, other.count == 1, word == typed, !code {
+            let (w, o) = (word.lowercased(), other.lowercased())
+            return oneLetterWords[from]?.contains(w) != true && oneLetterWords[to]?.contains(o) == true
+                && !exceptions.contains(w) && !exceptions.contains(o)
+        }
         guard word.count >= 2, other.count >= 2, other.allSatisfy(\.isLetter),
               !exceptions.contains(word.lowercased()), !exceptions.contains(other.lowercased()) else { return false }
         // Набирали латиницей код: `a.b`, `x[i]`, `getUser`, `fn` — не наше дело.
@@ -139,7 +144,7 @@ enum LayoutRules {
                "ли", "бы", "её", "их", "ей", "им", "ко", "со", "во", "об"],
         "en": ["to", "of", "in", "it", "is", "be", "as", "at", "so", "we", "he", "by", "or", "on", "do", "if", "me",
                "my", "up", "an", "go", "no", "us", "am", "hi", "ok",
-               "cd", "ls", "rm", "mv", "cp", "ps"], // команды терминала: «св ..» → «cd ..»
+               "cd", "ls", "rm", "mv", "cp", "ps", "pr"], // команды терминала: «св ..» → «cd ..», «зк» → «pr»
     ]
 
     /// Слова, которых нет в системном словаре, но которые печатают постоянно.
@@ -149,7 +154,7 @@ enum LayoutRules {
             api async await bash brew cli config css csv curl docker env git github gitlab grep html http https ios
             json jwt kubectl localhost macos nginx npm npx pnpm postgres regex repo sdk sql ssh sudo swift swiftui
             tmux url utf vscode xcode yaml yml zsh claude cursor typescript javascript nodejs frontend backend
-            pwd mkdir rmdir chmod chown pip
+            pwd mkdir rmdir chmod chown pip vercel
             """.split(whereSeparator: \.isWhitespace).map(String.init)),
         "ru": ["баг", "баги", "бэкенд", "фронтенд", "коммит", "пуш", "мерж", "деплой", "релиз", "линтер", "кэш"],
     ]
@@ -307,7 +312,10 @@ func layoutSelfTest() {
     check("to ghbdtn ", "to привет ")                   // «to» — слово, остаётся
     check("press the ghbdtn ", "press the привет ")
     check("hello b ghbdtn ", "hello и привет ")         // до «hello» не доходим
-    check("b  ghbdtn ", "b  привет ")                   // два пробела — уже не одна фраза
+    check("z ", "я ")                                    // одиночные буквы — сами по себе
+    check("d ", "в ")
+    check("a ", "a ")                                    // «a» — слово
+    check("z ", "z ", code: true)
     check("ltdjgcjd ghbdtn ", "девопсов привет ")
     check("kubectl nginx ", "kubectl nginx ")
     check("b ghbdtn ", "b привет ", code: true)         // в коде «b» — скорее переменная
@@ -316,8 +324,10 @@ func layoutSelfTest() {
     precondition(toEn("cd") && toEn("cd", code: true) && toEn("ls", code: true) && toEn("pwd", code: true)) // св → cd
     precondition(!toRu("cd") && !toRu("ls", code: true))
     check("cd ", "cd ")
+    precondition(toEn("vercel") && !toRu("vercel"))                         // муксуд → vercel
+    precondition(toEn("pr") && toEn("PR") && !toRu("pr"))                    // зк → pr
     for word in ["api", "npm", "git", "json", "swift", "zsh", "kubectl", "claude", "cursor",
-                 "cd", "ls", "rm", "mv", "cp", "ps", "pwd", "mkdir", "rmdir", "chmod", "chown", "pip"] {
+                 "cd", "ls", "rm", "mv", "cp", "ps", "pwd", "mkdir", "rmdir", "chmod", "chown", "pip", "vercel", "pr"] {
         precondition(!LayoutRules.isWord(ru.translate(keys(word)), lang: "ru"), "\(word) перекрывает русское слово")
     }
 }
