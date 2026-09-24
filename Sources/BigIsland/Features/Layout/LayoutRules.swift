@@ -141,7 +141,7 @@ enum LayoutRules {
     // ponytail: короткие слова и термины — ручные списки; расширять, когда что-то конкретное не переключается.
     private static let shortWords: [String: Set<String>] = [
         "ru": ["не", "на", "то", "по", "но", "за", "из", "от", "до", "он", "же", "мы", "вы", "ты", "да", "ну", "уж",
-               "ли", "бы", "её", "их", "ей", "им", "ко", "со", "во", "об"],
+               "ли", "бы", "её", "их", "ей", "им", "ко", "со", "во", "об", "че"],
         "en": ["to", "of", "in", "it", "is", "be", "as", "at", "so", "we", "he", "by", "or", "on", "do", "if", "me",
                "my", "up", "an", "go", "no", "us", "am", "hi", "ok",
                "cd", "ls", "rm", "mv", "cp", "ps", "pr"], // команды терминала: «св ..» → «cd ..», «зк» → «pr»
@@ -154,7 +154,7 @@ enum LayoutRules {
             api async await bash brew cli config css csv curl docker env git github gitlab grep html http https ios
             json jwt kubectl localhost macos nginx npm npx pnpm postgres regex repo sdk sql ssh sudo swift swiftui
             tmux url utf vscode xcode yaml yml zsh claude cursor typescript javascript nodejs frontend backend
-            pwd mkdir rmdir chmod chown pip vercel
+            pwd mkdir rmdir chmod chown pip vercel mvp
             """.split(whereSeparator: \.isWhitespace).map(String.init)),
         "ru": ["баг", "баги", "бэкенд", "фронтенд", "коммит", "пуш", "мерж", "деплой", "релиз", "линтер", "кэш"],
     ]
@@ -326,8 +326,10 @@ func layoutSelfTest() {
     check("cd ", "cd ")
     precondition(toEn("vercel") && !toRu("vercel"))                         // муксуд → vercel
     precondition(toEn("pr") && toEn("PR") && !toRu("pr"))                    // зк → pr
+    precondition(toEn("mvp") && !toRu("mvp"))                               // ьмз → mvp
+    check("xt ", "че ")
     for word in ["api", "npm", "git", "json", "swift", "zsh", "kubectl", "claude", "cursor",
-                 "cd", "ls", "rm", "mv", "cp", "ps", "pwd", "mkdir", "rmdir", "chmod", "chown", "pip", "vercel", "pr"] {
+                 "cd", "ls", "rm", "mv", "cp", "ps", "pwd", "mkdir", "rmdir", "chmod", "chown", "pip", "vercel", "pr", "mvp"] {
         precondition(!LayoutRules.isWord(ru.translate(keys(word)), lang: "ru"), "\(word) перекрывает русское слово")
     }
 }
