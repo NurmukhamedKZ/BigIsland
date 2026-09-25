@@ -71,6 +71,12 @@ enum LayoutRules {
             return oneLetterWords[from]?.contains(w) != true && oneLetterWords[to]?.contains(o) == true
                 && !exceptions.contains(w) && !exceptions.contains(o)
         }
+        // «СДФГВУюьв» → «CLAUDE.md»: в русской раскладке точка — это «ю», `@` — это `"`, поэтому в кириллице
+        // имя файла и почта — одно слово.
+        if to == "en", isFileName(other) || isEmail(other), !isWord(word, lang: from),
+           !exceptions.contains(word.lowercased()), !exceptions.contains(other.lowercased()) {
+            return true
+        }
         guard word.count >= 2, other.count >= 2, other.allSatisfy(\.isLetter),
               !exceptions.contains(word.lowercased()), !exceptions.contains(other.lowercased()) else { return false }
         // Набирали латиницей код: `a.b`, `x[i]`, `getUser`, `fn` — не наше дело.
@@ -134,13 +140,36 @@ enum LayoutRules {
         text.trimmingCharacters(in: CharacterSet.letters.inverted)
     }
 
+    /// «block.pdf», «CLAUDE.md», «app.test.ts»: имя из букв/цифр/`_-.` и известное расширение (≥ 2 букв — «плюс» ≠ «gk.c»).
+    private static func isFileName(_ text: String) -> Bool {
+        guard let dot = text.lastIndex(of: "."), fileExtensions.contains(text[text.index(after: dot)...].lowercased())
+        else { return false }
+        let name = text[..<dot]
+        return name.contains(where: \.isLetter) && name.allSatisfy { $0.isLetter || $0.isNumber || "_-.".contains($0) }
+    }
+
+    /// «nurekeashekei@gmail.com»: `имя@домен.зона`, зона — ≥ 2 букв.
+    private static func isEmail(_ text: String) -> Bool {
+        let parts = text.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty,
+              parts[0].allSatisfy({ $0.isLetter || $0.isNumber || "._-+".contains($0) }) else { return false }
+        let labels = parts[1].split(separator: ".", omittingEmptySubsequences: false)
+        return labels.count >= 2 && labels.allSatisfy { !$0.isEmpty && $0.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" } }
+            && labels.last!.count >= 2 && labels.last!.allSatisfy(\.isLetter)
+    }
+
+    private static let fileExtensions = Set("""
+        md txt pdf png jpg jpeg gif svg webp heic mov mp3 mp4 wav zip tar gz dmg app plist json yaml yml toml xml csv
+        html css js ts tsx jsx py swift go rs rb java kt sh zsh env lock log sql doc docx xls xlsx ppt pptx ipynb
+        """.split(whereSeparator: \.isWhitespace).map(String.init))
+
     private static func isCamel(_ word: String) -> Bool {
         word.dropFirst().contains { $0.isUppercase } && word != word.uppercased()
     }
 
     // ponytail: короткие слова и термины — ручные списки; расширять, когда что-то конкретное не переключается.
     private static let shortWords: [String: Set<String>] = [
-        "ru": ["не", "на", "то", "по", "но", "за", "из", "от", "до", "он", "же", "мы", "вы", "ты", "да", "ну", "уж",
+        "ru": ["не", "на", "то", "по", "но", "за", "из", "от", "до", "он", "же", "мы", "вы", "ты", "да", "ну", "уж", "ок",
                "ли", "бы", "её", "их", "ей", "им", "ко", "со", "во", "об", "че"],
         "en": ["to", "of", "in", "it", "is", "be", "as", "at", "so", "we", "he", "by", "or", "on", "do", "if", "me",
                "my", "up", "an", "go", "no", "us", "am", "hi", "ok",
@@ -154,9 +183,9 @@ enum LayoutRules {
             api async await bash brew cli config css csv curl docker env git github gitlab grep html http https ios
             json jwt kubectl localhost macos nginx npm npx pnpm postgres regex repo sdk sql ssh sudo swift swiftui
             tmux url utf vscode xcode yaml yml zsh claude cursor typescript javascript nodejs frontend backend
-            pwd mkdir rmdir chmod chown pip vercel mvp
+            pwd mkdir rmdir chmod chown pip vercel mvp vps ashekey
             """.split(whereSeparator: \.isWhitespace).map(String.init)),
-        "ru": ["баг", "баги", "бэкенд", "фронтенд", "коммит", "пуш", "мерж", "деплой", "релиз", "линтер", "кэш"],
+        "ru": ["баг", "баги", "бэкенд", "фронтенд", "коммит", "пуш", "мерж", "деплой", "релиз", "линтер", "кэш", "аха"],
     ]
 }
 
@@ -204,6 +233,12 @@ struct Typing {
         word = []
         spaces = space ? 1 : 0
         let typed = from.translate(keys)
+        // «9ю5» → «9.5»: в русской раскладке точка — это «ю». Раскладку не меняем — дальше, скорее всего, русский текст.
+        if from.lang == "ru", typed.range(of: #"^\d+(ю\d+)+$"#, options: .regularExpression) != nil {
+            recent = []
+            last = nil
+            return Fix(erase: typed.count, text: typed.replacingOccurrences(of: "ю", with: "."), target: from)
+        }
         guard LayoutRules.shouldSwitch(typed: typed, meant: to.translate(keys), from: from.lang, to: to.lang,
                                        code: code, exceptions: exceptions) else {
             // Длинное слово осталось как есть — раскладка верная, короткие перед ним уже не чиним.
@@ -327,9 +362,23 @@ func layoutSelfTest() {
     precondition(toEn("vercel") && !toRu("vercel"))                         // муксуд → vercel
     precondition(toEn("pr") && toEn("PR") && !toRu("pr"))                    // зк → pr
     precondition(toEn("mvp") && !toRu("mvp"))                               // ьмз → mvp
+    precondition(toEn("vps") && toEn("VPS") && !toRu("vps"))                  // МЗЫ → VPS
+    check("f[f ", "аха ")
     check("xt ", "че ")
+    precondition(toEn("CLAUDE.md") && toEn("block.pdf") && toEn("app.test.ts") && toEn("README.md"))  // СДФГВУюьв → CLAUDE.md
+    precondition(toEn("nurekeashekei@gmail.com") && toEn("a.b-c@mail.co.uk"))  // тгкулуфырулуш"пьфшдюсщь → почта
+    precondition(!toEn("a@b") && !toEn("@gmail.com") && !toEn("a@@b.com"))
+    precondition(toEn("ashekey") && !toRu("ashekey"))                        // фырулун → ashekey
+    check("jr ", "ок ")
+    for (number, expected) in [("9.5", "9.5"), ("164.834", "164.834"), ("1.2.3", "1.2.3"), ("9.", nil), (".5", nil)] {
+        var typing = Typing()
+        keys(number).forEach { typing.letter($0) }
+        let fix = typing.end(space: true, from: ru, to: en, code: false, exceptions: [])
+        precondition(fix?.text == expected && (fix == nil || fix!.target.id == ru.id), "«\(number)» → \(String(describing: fix?.text))")
+    }
+    precondition(!toEn("gk.c") && !toEn("foo.bar"))                          // «плюс», неизвестное расширение
     for word in ["api", "npm", "git", "json", "swift", "zsh", "kubectl", "claude", "cursor",
-                 "cd", "ls", "rm", "mv", "cp", "ps", "pwd", "mkdir", "rmdir", "chmod", "chown", "pip", "vercel", "pr", "mvp"] {
+                 "cd", "ls", "rm", "mv", "cp", "ps", "pwd", "mkdir", "rmdir", "chmod", "chown", "pip", "vercel", "pr", "mvp", "vps", "ashekey"] {
         precondition(!LayoutRules.isWord(ru.translate(keys(word)), lang: "ru"), "\(word) перекрывает русское слово")
     }
 }
